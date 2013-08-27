@@ -40,7 +40,8 @@ Use it:
 ```Objective-C
 - (void)viewDidLoad {
     [[self getUpcomingMovies] done:^(id upcomingMoviewJson) {
-        // update the UI with the result, the done callback is automatically running on the main queue // (or whatever queue you're on when you call done: it)
+        // update the UI with the result, the done callback is automatically running on the main queue
+        // (or whatever queue you're on when you call done:)
     }];
 }
 ```
