@@ -66,3 +66,7 @@ Transform the result of a promise (returns a new promise):
 
 
 
+
+
+[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/triposo/promise/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
+
