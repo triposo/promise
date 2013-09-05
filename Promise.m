@@ -14,11 +14,8 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
-#import <objc/runtime.h>
 #import "Promise.h"
-#import "NSMutableArray+Util.h"
 #import "PSYBlockTimer.h"
-#import "ASyncData.h"
 
 @implementation Subscription {
     id _result;
@@ -125,10 +122,18 @@
 
 @implementation Promise
 
++ (NSArray *)arrayByRepeatingObject:(id)obj times:(NSUInteger)t {
+    id arr[t];
+    for (NSUInteger i = 0; i < t; ++i) {
+        arr[i] = obj;
+    }
+    return [NSArray arrayWithObjects:arr count:t];
+}
+
 + (Promise *)successfulAsList:(NSArray *)promises deadline:(NSTimeInterval)deadlineSeconds {
     Deferred *result = [Deferred deferred];
     NSMutableArray *results =
-            [NSMutableArray arrayWithArray:[NSArray arrayByRepeatingObject:[NSNull null] times:[promises count]]];
+            [NSMutableArray arrayWithArray:[self arrayByRepeatingObject:[NSNull null] times:[promises count]]];
     NSMutableSet *stillRunning = [NSMutableSet setWithArray:promises];
     for (NSUInteger index = 0; index < [promises count]; index++) {
         Promise *promise = [promises objectAtIndex:index];
@@ -182,6 +187,10 @@
 
 - (Subscription *)progressAndDone:(void (^)(id))progress {
     return [self subscribe:[Subscription subscriptionWithDone:progress fail:nil progress:progress]];
+}
+
+- (Subscription *)any:(void (^)(id))callback {
+    return [self subscribe:[Subscription subscriptionWithDone:callback fail:callback progress:callback]];
 }
 
 - (Subscription *)done:(void (^)(id))callback {
@@ -303,7 +312,7 @@
     BOOL _isRejected;
     id _error;
 
-    void (^_subscribedCallback)();
+    void (^_subscribedCallback)(Deferred *deferred1);
 }
 
 static NSOperationQueue *_backgroundQueue;
@@ -314,7 +323,7 @@ static NSOperationQueue *_backgroundQueue;
 }
 
 
-- (id)initWithSubscriptionCallback:(void (^)())callback {
+- (id)initWithSubscriptionCallback:(void (^)(Deferred *))callback {
     self = [super init];
     if (self) {
         if (callback) {
@@ -330,7 +339,7 @@ static NSOperationQueue *_backgroundQueue;
     id result;
     BOOL isRejected;
     id error;
-    void (^subscribedCallback)();
+    void (^subscribedCallback)(Deferred *deferred1);
 
     @synchronized (self) {
         if (_subscriptions) {
@@ -353,7 +362,7 @@ static NSOperationQueue *_backgroundQueue;
     }
 
     if (subscribedCallback) {
-        subscribedCallback();
+        subscribedCallback(self);
     }
 
     if (isResolved) {
@@ -393,7 +402,7 @@ static NSOperationQueue *_backgroundQueue;
     return deferred;
 }
 
-+ (instancetype)deferredWithSubscribedCallback:(void (^)())callback {
++ (instancetype)runWhenSubscribed:(void (^)(Deferred *))callback {
     return [[self alloc] initWithSubscriptionCallback:callback];
 }
 
@@ -459,6 +468,16 @@ static NSOperationQueue *_backgroundQueue;
     return self;
 }
 
++ (Deferred *)on:(NSOperationQueue *)queue runWhenSubscribed:(void (^)(Deferred *))run {
+    return [Deferred runWhenSubscribed:^(Deferred *deferred) {
+        [queue addOperationWithBlock:^{
+            @autoreleasepool {
+                run(deferred);
+            }
+        }];
+    }];
+}
+
 + (Deferred *)background:(void (^)(Deferred *))run {
     return [[Deferred deferred] on:_backgroundQueue run:run];
 }
@@ -499,6 +518,12 @@ static NSOperationQueue *_backgroundQueue;
     @synchronized (self) {
         [self removeCancelledSubscriptions];
         return (BOOL) [_subscriptions count];
+    }
+}
+
+- (void)removeAllSubscribers {
+    @synchronized (self) {
+        _subscriptions = nil;
     }
 }
 @end
